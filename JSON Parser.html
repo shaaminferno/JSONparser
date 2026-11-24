@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal JSON Data Table</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Remove default marker from details to replace with custom icon */
+        details > summary {
+            list-style: none;
+        }
+        details > summary::-webkit-details-marker {
+            display: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 sm:p-8">
+
+    <div class="w-full max-w-[95%] bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]">
+        <!-- Header -->
+        <div class="bg-white p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-shrink-0">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Universal Data Viewer</h1>
+                <p class="text-sm text-gray-500 mt-1">Parses & Flattens JSON Arrays automatically</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button id="copy-btn" onclick="copyToExcel()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 group">
+                    <i class="fas fa-copy group-hover:scale-110 transition-transform"></i> Copy for Excel
+                </button>
+                <div class="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium border border-blue-100">
+                    <i class="fas fa-database mr-2"></i>
+                    <span id="record-count">0 Records</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Section -->
+        <div class="bg-gray-50 p-4 border-b border-gray-200 flex-shrink-0">
+            <details class="group" open>
+                <summary class="flex justify-between items-center font-medium cursor-pointer list-none text-gray-700 hover:text-blue-600 transition-colors select-none">
+                    <span class="flex items-center gap-2">
+                        <i class="fas fa-file-code text-blue-500"></i> Import JSON Data
+                    </span>
+                    <span class="transition group-open:rotate-180">
+                        <i class="fas fa-chevron-down"></i>
+                    </span>
+                </summary>
+                <div class="text-gray-500 mt-3">
+                    <textarea id="json-input" class="w-full h-32 p-3 text-xs font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-y" placeholder='Paste your JSON here...'></textarea>
+                    <div class="flex items-center justify-between mt-3">
+                        <button onclick="loadUserJson()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+                            <i class="fas fa-sync-alt"></i> Load Data
+                        </button>
+                        <span id="error-message" class="text-red-500 text-xs font-medium hidden flex items-center gap-1">
+                            <i class="fas fa-exclamation-circle"></i> <span id="error-text">Invalid JSON format</span>
+                        </span>
+                    </div>
+                </div>
+            </details>
+        </div>
+
+        <!-- Column Selection Section -->
+        <div class="bg-white p-4 border-b border-gray-200 flex-shrink-0">
+            <details class="group" open>
+                <summary class="flex justify-between items-center font-medium cursor-pointer list-none text-gray-700 hover:text-purple-600 transition-colors select-none">
+                    <span class="flex items-center gap-2">
+                        <i class="fas fa-columns text-purple-500"></i> Customize Columns
+                    </span>
+                    <span class="transition group-open:rotate-180">
+                        <i class="fas fa-chevron-down"></i>
+                    </span>
+                </summary>
+                <div class="mt-4">
+                    <div class="flex gap-2 mb-3">
+                        <button onclick="selectAllColumns(true)" class="text-xs text-blue-600 hover:underline">Select All</button>
+                        <span class="text-gray-300">|</span>
+                        <button onclick="selectAllColumns(false)" class="text-xs text-blue-600 hover:underline">Deselect All</button>
+                    </div>
+                    <div id="column-controls" class="flex flex-col gap-1 max-h-60 overflow-y-auto custom-scrollbar p-1 border rounded-lg bg-gray-50">
+                        <div class="p-4 text-center text-gray-400 text-xs italic">Import JSON data to see available columns.</div>
+                    </div>
+                </div>
+            </details>
+        </div>
+
+        <!-- Table Container -->
+        <div class="overflow-auto custom-scrollbar flex-grow bg-white relative">
+            <table class="w-full text-left border-collapse sticky top-0">
+                <thead class="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                    <tr id="table-header-row" class="text-gray-600 text-sm uppercase tracking-wider border-b border-gray-200">
+                        <!-- Headers generated here -->
+                        <th class="p-4 font-semibold text-center bg-gray-50 text-gray-400 italic w-full">Waiting for data...</th>
+                    </tr>
+                </thead>
+                <tbody id="invoice-table-body" class="text-gray-700 text-sm">
+                    <!-- Rows will be inserted here by JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Footer / Raw Data Toggle -->
+        <div class="bg-gray-50 p-4 border-t border-gray-200 flex-shrink-0">
+             <button onclick="toggleRawData()" class="text-xs font-medium text-blue-600 hover:text-blue-800 focus:outline-none flex items-center gap-1 transition-colors">
+                <i class="fas fa-code"></i> Toggle Raw JSON View
+            </button>
+             <pre id="raw-json" class="hidden mt-4 bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-x-auto font-mono shadow-inner max-h-48 custom-scrollbar"></pre>
+        </div>
+    </div>
+
+    <script>
+        // Initial state is empty
+        let jsonData = null;
+
+        // State variables
+        let availableKeys = [];
+        let selectedKeys = []; 
+        let flattenedData = [];
+
+        // Helper: Flatten nested objects
+        function flattenObject(obj, prefix = '', result = {}) {
+            for (const key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                    const value = obj[key];
+                    const newKey = prefix ? `${prefix}.${key}` : key;
+
+                    if (value && typeof value === 'object' && !Array.isArray(value)) {
+                        flattenObject(value, newKey, result);
+                    } else {
+                        result[newKey] = value;
+                    }
+                }
+            }
+            return result;
+        }
+
+        // Smart Function to find data array
+        function findDataArray(data) {
+            if (!data) return [];
+            // 1. If root is array, return it
+            if (Array.isArray(data)) return data;
+
+            let queue = [data];
+            let visited = new Set();
+            let candidates = [];
+
+            // Breadth-First Search to find arrays
+            while (queue.length > 0) {
+                let current = queue.shift();
+                
+                if (!current || typeof current !== 'object' || visited.has(current)) continue;
+                visited.add(current);
+
+                const keys = Object.keys(current);
+                for (const key of keys) {
+                    const value = current[key];
+                    
+                    if (Array.isArray(value)) {
+                        // We found an array. 
+                        // If it has objects, it's a strong candidate.
+                        if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+                            return value; // Found a data list!
+                        }
+                        // Keep track of candidates
+                        candidates.push(value);
+                    } else if (typeof value === 'object' && value !== null) {
+                        queue.push(value);
+                    }
+                }
+            }
+            
+            // Fallback
+            return candidates.length > 0 ? candidates[0] : [];
+        }
+
+        // Helper: Format CamelCase to readable
+        function formatLabel(text) {
+            const result = text.replace(/([A-Z])/g, " $1");
+            return result.charAt(0).toUpperCase() + result.slice(1);
+        }
+
+        function detectKeys(flatItems) {
+            const keys = new Set();
+            flatItems.forEach(item => {
+                Object.keys(item).forEach(key => keys.add(key));
+            });
+            availableKeys = Array.from(keys).sort();
+            
+            // Reset selection - user must explicitly select columns
+            // Only preserve keys if they exist in the new dataset? No, start fresh.
+            selectedKeys = []; 
+        }
+
+        // --- TREE BUILDING LOGIC ---
+
+        function buildHierarchy(keys) {
+            const tree = {};
+            keys.forEach(key => {
+                const parts = key.split('.');
+                let currentLevel = tree;
+                parts.forEach((part, index) => {
+                    if (!currentLevel[part]) {
+                        currentLevel[part] = {
+                            key: part,
+                            fullPath: parts.slice(0, index + 1).join('.'), 
+                            children: {},
+                            isLeaf: false 
+                        };
+                    }
+                    if (index === parts.length - 1) {
+                        currentLevel[part].isLeaf = true;
+                    }
+                    currentLevel = currentLevel[part].children;
+                });
+            });
+            return tree;
+        }
+
+        function renderTree(nodeObj, container) {
+            const nodeKeys = Object.keys(nodeObj).sort();
+
+            nodeKeys.forEach(key => {
+                const node = nodeObj[key];
+                const hasChildren = Object.keys(node.children).length > 0;
+
+                if (hasChildren) {
+                    const details = document.createElement('details');
+                    details.className = "group/item w-full";
+                    details.open = false; 
+
+                    const summary = document.createElement('summary');
+                    summary.className = "flex items-center gap-2 p-2 hover:bg-gray-100 cursor-pointer select-none rounded text-gray-700 font-medium text-sm transition-colors";
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'form-checkbox h-4 w-4 text-purple-600 rounded focus:ring-purple-500 border-gray-300';
+                    checkbox.dataset.group = node.fullPath;
+                    
+                    const icon = document.createElement('i');
+                    icon.className = "fas fa-folder text-blue-300 group-open/item:text-blue-500 transition-colors w-4";
+                    
+                    const span = document.createElement('span');
+                    span.textContent = formatLabel(node.key);
+
+                    const chevron = document.createElement('i');
+                    chevron.className = "fas fa-chevron-right text-xs text-gray-400 ml-auto transition-transform group-open/item:rotate-90";
+
+                    summary.appendChild(checkbox);
+                    summary.appendChild(icon);
+                    summary.appendChild(span);
+                    summary.appendChild(chevron);
+                    details.appendChild(summary);
+
+                    const childrenContainer = document.createElement('div');
+                    childrenContainer.className = "ml-6 border-l-2 border-gray-100 pl-2 mt-1 flex flex-col gap-1";
+                    
+                    renderTree(node.children, childrenContainer);
+                    details.appendChild(childrenContainer);
+                    container.appendChild(details);
+
+                    checkbox.addEventListener('change', (e) => {
+                        const checked = e.target.checked;
+                        const childInputs = childrenContainer.querySelectorAll('input[type="checkbox"]');
+                        childInputs.forEach(input => {
+                            input.checked = checked;
+                            updateSelection(input.value, checked);
+                        });
+                        renderTable();
+                    });
+
+                } else {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = "flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer";
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'form-checkbox h-3.5 w-3.5 text-blue-600 rounded focus:ring-blue-500 border-gray-300';
+                    checkbox.value = node.fullPath;
+                    checkbox.checked = selectedKeys.includes(node.fullPath);
+                    
+                    checkbox.onchange = (e) => {
+                        updateSelection(node.fullPath, e.target.checked);
+                        renderTable();
+                    };
+
+                    const span = document.createElement('span');
+                    span.className = "text-xs text-gray-600 truncate";
+                    span.textContent = formatLabel(node.key);
+
+                    wrapper.appendChild(checkbox);
+                    wrapper.appendChild(span);
+                    container.appendChild(wrapper);
+                }
+            });
+        }
+
+        function updateSelection(key, isSelected) {
+            if (!key) return; 
+            if (isSelected) {
+                if (!selectedKeys.includes(key)) selectedKeys.push(key);
+            } else {
+                selectedKeys = selectedKeys.filter(k => k !== key);
+            }
+        }
+
+        function renderColumnControls() {
+            const container = document.getElementById('column-controls');
+            container.innerHTML = '';
+            
+            if (availableKeys.length === 0) {
+                container.innerHTML = '<div class="p-4 text-center text-gray-400 text-xs italic">No columns found. Please import data.</div>';
+                return;
+            }
+
+            const tree = buildHierarchy(availableKeys);
+            renderTree(tree, container);
+        }
+
+        function selectAllColumns(select) {
+            const inputs = document.querySelectorAll('#column-controls input[type="checkbox"]');
+            inputs.forEach(input => {
+                input.checked = select;
+                if(input.value) { 
+                    updateSelection(input.value, select);
+                }
+            });
+            renderTable();
+        }
+
+        // --- END TREE LOGIC ---
+
+        function formatHeader(key) {
+            const parts = key.split('.');
+            const lastPart = parts[parts.length - 1]; 
+            const result = lastPart.replace(/([A-Z])/g, " $1");
+            let label = result.charAt(0).toUpperCase() + result.slice(1);
+            
+            if(parts.length > 1) {
+                const parent = parts[parts.length-2].charAt(0).toUpperCase() + parts[parts.length-2].slice(1);
+                return `${parent}: ${label}`; 
+            }
+            return label;
+        }
+
+        function renderTable() {
+            const tableBody = document.getElementById('invoice-table-body');
+            const headerRow = document.getElementById('table-header-row');
+            const recordCountDisplay = document.getElementById('record-count');
+            const rawView = document.getElementById('raw-json');
+
+            // Handle empty/initial state
+            if (!jsonData) {
+                recordCountDisplay.innerText = "0 Records";
+                headerRow.innerHTML = `<th class="p-4 font-semibold text-center bg-gray-50 text-gray-400 italic w-full">Waiting for data...</th>`;
+                tableBody.innerHTML = `<tr><td class="p-8 text-center text-gray-500">Please paste JSON data in the input box above to begin.</td></tr>`;
+                rawView.textContent = "";
+                return;
+            }
+
+            recordCountDisplay.innerText = `${flattenedData.length} Records`;
+
+            // If no data found in JSON
+            if (flattenedData.length === 0) {
+                 headerRow.innerHTML = `<th class="p-4 font-semibold text-center bg-gray-50 text-gray-400 italic w-full">No Data Found</th>`;
+                 tableBody.innerHTML = `<tr><td class="p-8 text-center text-gray-500">No array data found in the provided JSON.</td></tr>`;
+                 rawView.textContent = JSON.stringify(jsonData, null, 2);
+                 return;
+            }
+
+            // If data exists but NO COLUMNS selected
+            if (selectedKeys.length === 0) {
+                headerRow.innerHTML = `<th class="p-4 font-semibold text-center bg-gray-50 text-gray-500 w-full">Data Loaded</th>`;
+                tableBody.innerHTML = `
+                    <tr>
+                        <td class="p-12 text-center">
+                            <div class="flex flex-col items-center justify-center gap-3">
+                                <i class="fas fa-columns text-4xl text-purple-200"></i>
+                                <h3 class="text-lg font-medium text-gray-700">Data Parsed Successfully</h3>
+                                <p class="text-sm text-gray-500 max-w-md">
+                                    Found <strong>${flattenedData.length}</strong> records with <strong>${availableKeys.length}</strong> potential columns. 
+                                    <br>Please select columns from the "Customize Columns" section above to display data.
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                rawView.textContent = JSON.stringify(jsonData, null, 2);
+                return;
+            }
+
+            // Standard Render (Data + Columns selected)
+            // Headers
+            let headerHTML = `<th class="p-4 font-semibold w-12 text-center bg-gray-50 border-r border-gray-100">#</th>`;
+            selectedKeys.forEach(key => {
+                headerHTML += `
+                    <th class="p-4 font-semibold bg-gray-50 whitespace-nowrap min-w-[120px]">
+                        <div class="flex items-center gap-2">
+                            ${formatHeader(key)}
+                        </div>
+                    </th>
+                `;
+            });
+            headerRow.innerHTML = headerHTML;
+
+            // Body
+            tableBody.innerHTML = '';
+            
+            // Limit render to first 1000 rows for performance if needed, but here we just render all
+            // To prevent UI blocking on huge datasets, we could use chunking, but for this context basic loop is okay.
+            
+            flattenedData.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.className = "hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 group";
+
+                let rowHTML = `<td class="p-4 text-center text-gray-400 font-medium text-xs border-r border-gray-100 sticky left-0 bg-white group-hover:bg-blue-50">${index + 1}</td>`;
+
+                selectedKeys.forEach(key => {
+                    let val = item[key];
+                    if (val === undefined || val === null) val = '-';
+                    let displayVal = String(val);
+                    if (displayVal.length > 50) displayVal = displayVal.substring(0, 50) + '...';
+
+                    rowHTML += `
+                        <td class="p-4 font-medium text-gray-700 text-xs max-w-xs truncate" title="${String(val).replace(/"/g, '&quot;')}">
+                            ${displayVal}
+                        </td>
+                    `;
+                });
+                
+                row.innerHTML = rowHTML;
+                tableBody.appendChild(row);
+            });
+
+            document.getElementById('raw-json').textContent = JSON.stringify(jsonData, null, 2);
+        }
+
+        function loadUserJson() {
+            const input = document.getElementById('json-input').value;
+            const errorContainer = document.getElementById('error-message');
+            const errorText = document.getElementById('error-text');
+
+            if (!input.trim()) {
+                errorText.textContent = "Please paste JSON data first.";
+                errorContainer.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const parsed = JSON.parse(input);
+                jsonData = parsed;
+                processData();
+                errorContainer.classList.add('hidden');
+                // Close the details panel to show the table (optional UX choice, keeping it open for column selection)
+            } catch (e) {
+                errorText.textContent = "Syntax Error: " + e.message;
+                errorContainer.classList.remove('hidden');
+            }
+        }
+
+        function processData() {
+            const rawList = findDataArray(jsonData);
+            // Re-flatten every time data changes
+            flattenedData = rawList.map(item => flattenObject(item));
+            
+            // Detect keys
+            detectKeys(flattenedData);
+            
+            // Render controls
+            renderColumnControls();
+            
+            // Render Table (will show "Please select columns" initially)
+            renderTable();
+        }
+
+        function copyToExcel() {
+            if (!jsonData || flattenedData.length === 0) { alert("No data to copy!"); return; }
+            if (selectedKeys.length === 0) { alert("Please select at least one column to copy."); return; }
+
+            const tsvData = flattenedData.map(item => {
+                return selectedKeys.map(key => {
+                    let val = item[key];
+                    if (val === undefined || val === null) val = '';
+                    return String(val).replace(/[\t\n\r]/g, ' '); 
+                }).join('\t');
+            }).join('\n');
+
+            const textarea = document.createElement('textarea');
+            textarea.value = tsvData;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                const btn = document.getElementById('copy-btn');
+                const originalContent = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.remove('bg-emerald-50', 'text-emerald-700');
+                btn.classList.add('bg-emerald-600', 'text-white');
+                setTimeout(() => {
+                    btn.innerHTML = originalContent;
+                    btn.classList.remove('bg-emerald-600', 'text-white');
+                    btn.classList.add('bg-emerald-50', 'text-emerald-700');
+                }, 2000);
+            } catch (err) {
+                alert("Failed to copy to clipboard");
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        }
+
+        function toggleRawData() {
+            const rawView = document.getElementById('raw-json');
+            rawView.classList.toggle('hidden');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Render empty state on load
+            renderTable();
+            renderColumnControls();
+        });
+
+    </script>
+</body>
+</html>
